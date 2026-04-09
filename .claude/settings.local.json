@@ -19,7 +19,16 @@
       "Bash('C:\\\\Users\\\\shane\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe' -c ':*)",
       "Bash('C:\\\\Users\\\\shane\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe' c:/Users/shane/memento-public/memento/benchmarks/longmemeval/run_benchmark.py --help)",
       "Bash(\"C:\\\\Users\\\\shane\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe\" -m pytest tests/test_memory_store.py -x -q)",
-      "Bash(\"C:\\\\Users\\\\shane\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe\" -m pytest tests/ -x -q)"
+      "Bash(\"C:\\\\Users\\\\shane\\\\AppData\\\\Local\\\\Python\\\\pythoncore-3.14-64\\\\python.exe\" -m pytest tests/ -x -q)",
+      "Bash(ls README*)",
+      "WebSearch",
+      "WebFetch(domain:omegamax.co)",
+      "WebFetch(domain:blog.getzep.com)",
+      "WebFetch(domain:www.emergence.ai)",
+      "WebFetch(domain:mastra.ai)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:vectorize.io)",
+      "WebFetch(domain:www.cognee.ai)"
     ]
   }
 }

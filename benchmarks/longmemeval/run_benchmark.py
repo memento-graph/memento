@@ -703,7 +703,7 @@ def _judge_answer(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
-            max_tokens=8,
+            max_completion_tokens=8,
         )
         verdict = response.choices[0].message.content.strip().lower()
         return "yes" if verdict.startswith("yes") else "no"
