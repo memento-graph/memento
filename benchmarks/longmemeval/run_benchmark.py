@@ -90,6 +90,18 @@ ANSWER_PROMPT = """\
 Below are memories retrieved from our past conversations, followed by the \
 user's question.
 
+Important guidelines:
+- Each conversation is tagged with its date in a [Conversation date: ...] \
+header. Use these dates to reason about when events happened, their \
+chronological order, and time spans between them.
+- When information was updated across conversations (e.g., a number changed, \
+a preference shifted, a status was revised), ALWAYS use the value from the \
+MOST RECENT conversation. Later conversations supersede earlier ones.
+- Answer based only on what is explicitly stated. Do not add to or modify \
+stated values (e.g., if the user says "my list has 25 titles", the answer \
+is 25 — do not add items mentioned in the same conversation unless the user \
+explicitly said the count changed).
+
 ## Retrieved Memories
 {memory_context}
 
@@ -99,8 +111,13 @@ user's question.
 ## Question
 {question}
 
-Answer the question step by step: first extract all the relevant information \
-from the memories, then reason over the information to get the answer."""
+Answer the question step by step:
+1. Extract ALL relevant facts and dates from the memories above.
+2. If the question involves timing or ordering, note the conversation dates.
+3. If the same fact appears with different values across conversations, use \
+the value from the latest conversation date.
+4. Give a direct, specific answer — do not say "I don't know" unless the \
+information is truly absent from the memories."""
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -225,10 +242,10 @@ def ingest_haystack(
                 timestamp=ts,
             )
             # Also store each turn separately in verbatim store for
-            # fine-grained search (no LLM calls, just text + embedding)
+            # fine-grained FTS5 keyword search (no LLM calls, no embeddings)
             for turn_num, turn in enumerate(session):
                 prefix = f"[Conversation date: {date}] " if date else ""
-                store.verbatim.store(
+                store.verbatim.store_text_only(
                     text=f"{prefix}{turn['role'].capitalize()}: {turn['content']}",
                     conversation_id=conv_id,
                     turn_number=turn_num + 1,
@@ -285,12 +302,38 @@ def _detect_shared_haystack(dataset: list[dict]) -> bool:
     )
 
 
+def _stratified_sample(dataset: list[dict], n: int) -> list[dict]:
+    """Sample *n* questions evenly across all categories."""
+    from collections import defaultdict
+    import random
+
+    by_cat: dict[str, list[dict]] = defaultdict(list)
+    for entry in dataset:
+        by_cat[entry.get("question_type", "unknown")].append(entry)
+
+    per_cat = max(1, n // len(by_cat))
+    sampled = []
+    for cat in sorted(by_cat):
+        items = by_cat[cat]
+        random.seed(42)  # Reproducible
+        sampled.extend(random.sample(items, min(per_cat, len(items))))
+
+    # Fill remaining slots if rounding left us short
+    remaining_ids = {e["question_id"] for e in sampled}
+    all_remaining = [e for e in dataset if e["question_id"] not in remaining_ids]
+    random.seed(42)
+    random.shuffle(all_remaining)
+    sampled.extend(all_remaining[: n - len(sampled)])
+    return sampled[:n]
+
+
 def run_benchmark(
     variant: str,
     output_path: str,
     *,
     per_turn: bool = False,
     limit: int | None = None,
+    sample: int | None = None,
     resume: bool = True,
     token_budget: int = 4000,
     answer_model: str | None = None,
@@ -302,12 +345,15 @@ def run_benchmark(
         output_path:   Path for the JSONL results file
         per_turn:      Ingest per-turn (slower, more granular) vs per-session
         limit:         Only process the first N questions (for testing)
+        sample:        Stratified sample of N questions across all categories
         resume:        Skip questions already present in *output_path*
         token_budget:  Token budget for Memento recall()
         answer_model:  Override the LLM model used for answer generation
     """
     dataset = load_dataset(variant)
-    if limit:
+    if sample and sample < len(dataset):
+        dataset = _stratified_sample(dataset, sample)
+    elif limit:
         dataset = dataset[:limit]
 
     print(f"\nLongMemEval benchmark — variant={variant}, questions={len(dataset)}")
@@ -705,6 +751,10 @@ def main() -> None:
         help="Process only the first N questions (for testing)",
     )
     run.add_argument(
+        "--sample", type=int, default=None,
+        help="Stratified sample of N questions across all 6 categories",
+    )
+    run.add_argument(
         "--no-resume", action="store_true",
         help="Start fresh instead of resuming from existing output",
     )
@@ -745,6 +795,7 @@ def main() -> None:
             output_path=args.output,
             per_turn=args.per_turn,
             limit=args.limit,
+            sample=args.sample,
             resume=not args.no_resume,
             token_budget=args.token_budget,
             answer_model=args.answer_model,

@@ -146,6 +146,31 @@ class VerbatimStore:
         logger.debug("Stored verbatim chunk: %s (%d chars)", chunk_id[:8], len(text))
         return chunk_id
 
+    def store_text_only(
+        self,
+        text: str,
+        conversation_id: str = "",
+        turn_number: int = 0,
+        participant: str = "",
+        source_type: str = "conversation",
+        timestamp: str | None = None,
+    ) -> str:
+        """Store text for FTS5 keyword search only (no embedding).
+
+        Much faster than store() — use when a full-session embedding already
+        covers semantic search and you only need keyword-level granularity.
+        """
+        chunk_id = _new_id()
+        ts = timestamp or _now()
+
+        self.db.execute(
+            """INSERT INTO verbatim_chunks (id, conversation_id, turn_number, text, timestamp, participant, source_type)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (chunk_id, conversation_id, turn_number, text, ts, participant, source_type),
+        )
+        self.db.conn.commit()
+        return chunk_id
+
     def search(self, query: str, top_k: int = 10) -> list[VerbatimResult]:
         """Hybrid search: vector similarity + BM25 keyword matching.
 
