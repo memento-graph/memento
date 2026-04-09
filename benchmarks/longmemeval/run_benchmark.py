@@ -101,6 +101,19 @@ MOST RECENT conversation. Later conversations supersede earlier ones.
 stated values (e.g., if the user says "my list has 25 titles", the answer \
 is 25 — do not add items mentioned in the same conversation unless the user \
 explicitly said the count changed).
+- If the question asks for a recommendation or suggestion, USE the \
+preferences and details you find in the memories to give a SPECIFIC, \
+CONCRETE answer. Do NOT ask clarifying questions back to the user — they \
+already shared their preferences in past conversations, and your job is to \
+remember and apply them. For example, if the user previously mentioned \
+loving rooftop pools and ocean views, recommend hotels with rooftop pools \
+and ocean views — do not ask "what amenities do you want?".
+- Tailor your response to the user's specific interests, hobbies, or domain \
+mentioned in the memories. Generic answers that ignore the user's known \
+preferences are wrong.
+- For counting questions ("how many X"), carefully enumerate every distinct \
+item mentioned across ALL conversations. Do not skip items because they \
+appear in different sessions. Build a numbered list first, then count.
 
 ## Retrieved Memories
 {memory_context}
@@ -112,11 +125,14 @@ explicitly said the count changed).
 {question}
 
 Answer the question step by step:
-1. Extract ALL relevant facts and dates from the memories above.
+1. Extract ALL relevant facts, preferences, and dates from the memories above.
 2. If the question involves timing or ordering, note the conversation dates.
 3. If the same fact appears with different values across conversations, use \
 the value from the latest conversation date.
-4. Give a direct, specific answer — do not say "I don't know" unless the \
+4. If the question asks for a recommendation, immediately apply the user's \
+known preferences to produce a specific answer — do not ask the user to \
+restate them.
+5. Give a direct, specific answer — do not say "I don't know" unless the \
 information is truly absent from the memories."""
 
 
@@ -165,7 +181,7 @@ def create_memory_store(db_path: str = ":memory:") -> MemoryStore:
     config = MementoConfig(
         db_path=Path(db_path),
         retrieval=RetrievalConfig(
-            default_token_budget=4000,   # Larger budget — benchmark needs more context
+            default_token_budget=8000,   # Larger budget — benchmark needs more context
             max_hop_depth=3,
         ),
         consolidation=ConsolidationConfig(
@@ -334,8 +350,9 @@ def run_benchmark(
     per_turn: bool = False,
     limit: int | None = None,
     sample: int | None = None,
+    category: str | None = None,
     resume: bool = True,
-    token_budget: int = 4000,
+    token_budget: int = 8000,
     answer_model: str | None = None,
 ) -> None:
     """Run the full benchmark: ingest → recall → answer → save.
@@ -351,6 +368,9 @@ def run_benchmark(
         answer_model:  Override the LLM model used for answer generation
     """
     dataset = load_dataset(variant)
+    if category:
+        dataset = [e for e in dataset if e.get("question_type") == category]
+        print(f"  Filtered to category={category}: {len(dataset)} questions")
     if sample and sample < len(dataset):
         dataset = _stratified_sample(dataset, sample)
     elif limit:
@@ -755,12 +775,19 @@ def main() -> None:
         help="Stratified sample of N questions across all 6 categories",
     )
     run.add_argument(
+        "--category", type=str, default=None,
+        choices=["single-session-user", "single-session-assistant",
+                 "single-session-preference", "multi-session",
+                 "temporal-reasoning", "knowledge-update"],
+        help="Only run questions from this category",
+    )
+    run.add_argument(
         "--no-resume", action="store_true",
         help="Start fresh instead of resuming from existing output",
     )
     run.add_argument(
-        "--token-budget", type=int, default=4000,
-        help="Token budget for Memento recall (default: 4000)",
+        "--token-budget", type=int, default=8000,
+        help="Token budget for Memento recall (default: 8000)",
     )
     run.add_argument(
         "--answer-model", default=None,
@@ -796,6 +823,7 @@ def main() -> None:
             per_turn=args.per_turn,
             limit=args.limit,
             sample=args.sample,
+            category=args.category,
             resume=not args.no_resume,
             token_budget=args.token_budget,
             answer_model=args.answer_model,
