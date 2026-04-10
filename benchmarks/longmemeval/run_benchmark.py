@@ -281,12 +281,40 @@ def ingest_haystack(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _is_counting_question(question: str) -> bool:
-    """Detect counting/enumeration questions."""
+    """Detect counting/enumeration questions where two-pass helps.
+
+    Two-pass (enumerate then count) helps when the answer requires
+    finding and listing multiple distinct items across conversations.
+
+    It does NOT help for:
+    - Date math: "How many days between X and Y?"
+    - Amount lookups: "How many pages have I read?"
+    - Value queries: "How many stars do I need?"
+    """
     q = question.lower()
-    return any(p in q for p in [
-        "how many", "how much", "total number", "count",
-        "list all", "list every",
-    ])
+
+    # Must contain a counting trigger
+    if not any(p in q for p in [
+        "how many", "total number", "list all", "list every",
+    ]):
+        return False
+
+    # Exclude date math / duration / amount lookups
+    exclude_patterns = [
+        "how many days", "how many hours", "how many minutes",
+        "how many weeks", "how many months", "how many years",
+        "how long", "how much",
+        "how many pages", "how many times", "how many stars",
+        "how many titles", "how many engineers", "how many films",
+        "how many episodes", "how many chapters",
+        "do i need", "do i have to", "did i spend",
+        "have i read", "have i watched", "have i written",
+        "currently", "so far", "in total",
+    ]
+    if any(p in q for p in exclude_patterns):
+        return False
+
+    return True
 
 
 COUNTING_ENUMERATE_PROMPT = """\
@@ -360,11 +388,6 @@ def generate_answer(
     All answers go through a self-verification pass that catches obvious
     errors before returning.
     """
-    if _is_counting_question(question):
-        return _two_pass_counting(
-            llm_client, model, memory_context, question, current_date,
-        )
-
     user_msg = ANSWER_PROMPT.format(
         memory_context=memory_context,
         current_date=current_date,
