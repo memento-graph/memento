@@ -181,7 +181,7 @@ def create_memory_store(db_path: str = ":memory:") -> MemoryStore:
     config = MementoConfig(
         db_path=Path(db_path),
         retrieval=RetrievalConfig(
-            default_token_budget=8000,   # Larger budget — benchmark needs more context
+            default_token_budget=4000,   # Larger budget — benchmark needs more context
             max_hop_depth=3,
         ),
         consolidation=ConsolidationConfig(
@@ -352,7 +352,7 @@ def run_benchmark(
     sample: int | None = None,
     category: str | None = None,
     resume: bool = True,
-    token_budget: int = 8000,
+    token_budget: int = 4000,
     answer_model: str | None = None,
 ) -> None:
     """Run the full benchmark: ingest → recall → answer → save.
@@ -398,7 +398,28 @@ def run_benchmark(
     llm_client = create_llm_client(llm_config)
     provider = llm_config.provider or _detect_provider()
     model = answer_model or get_default_model(provider, "chat")
-    print(f"  Answer model: {model} ({provider})")
+
+    print()
+    print("=" * 60)
+    print(f"  ANSWER MODEL: {model}")
+    print(f"  PROVIDER:     {provider}")
+    print(f"  QUESTIONS:    {len(remaining)} (of {len(dataset)} after resume)")
+    print(f"  TOKEN BUDGET: {token_budget}")
+    print("=" * 60)
+
+    # Sanity check: warn loudly if the detected provider is unexpected
+    expected_keys = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "gemini": "GOOGLE_API_KEY",
+    }
+    expected_key = expected_keys.get(provider)
+    if expected_key and not os.environ.get(expected_key):
+        print(f"\n  ⚠ WARNING: Provider is {provider} but {expected_key} is NOT set!")
+    if provider == "openai" and os.environ.get("ANTHROPIC_API_KEY"):
+        print("\n  ⚠ WARNING: ANTHROPIC_API_KEY is set but provider is openai.")
+        print("  Set MEMENTO_LLM_PROVIDER=anthropic to use Claude instead.")
+    print()
 
     shared = _detect_shared_haystack(dataset)
     print(f"  Shared haystack: {shared}")
@@ -786,8 +807,8 @@ def main() -> None:
         help="Start fresh instead of resuming from existing output",
     )
     run.add_argument(
-        "--token-budget", type=int, default=8000,
-        help="Token budget for Memento recall (default: 8000)",
+        "--token-budget", type=int, default=4000,
+        help="Token budget for Memento recall (default: 4000)",
     )
     run.add_argument(
         "--answer-model", default=None,
