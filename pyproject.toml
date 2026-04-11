@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "memento-memory"
 version = "0.1.0"
-description = "Temporal knowledge graph memory system for AI agents"
+description = "Bitemporal knowledge graph memory for AI agents — any model, same memory"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
