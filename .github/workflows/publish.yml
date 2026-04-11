@@ -1,0 +1,52 @@
+commit 5bc97601eab5462a20445094bc0d6613654fd4fe
+Author: Shane Farkas <shane.farkas@gmail.com>
+Date:   Sat Apr 11 01:44:47 2026 -0700
+
+    Revert adaptive retrieval to fixed defaults, add PyPI publish workflow
+    
+    Remove query classification (wide/narrow) from retrieval — fixed
+    top_k=10 and max_conversations=5 matches the v3 config that scored
+    91.2% on LongMemEval. Adaptive retrieval was a net wash that added
+    complexity without consistent gains.
+    
+    Also fix unicode warning emoji that broke on Windows cp1252, and add
+    GitHub Actions workflow for PyPI publishing via trusted publishers.
+    
+    Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+
+diff --git a/.github/workflows/publish.yml b/.github/workflows/publish.yml
+new file mode 100644
+index 0000000..829fa58
+--- /dev/null
++++ b/.github/workflows/publish.yml
+@@ -0,0 +1,30 @@
++name: Publish to PyPI
++
++on:
++  release:
++    types: [published]
++
++permissions:
++  id-token: write
++
++jobs:
++  publish:
++    runs-on: ubuntu-latest
++    environment: pypi
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: "3.13"
++
++      - name: Install build tools
++        run: pip install build
++
++      - name: Build package
++        run: python -m build
++
++      - name: Publish to PyPI
++        uses: pypa/gh-action-pypi-publish@release/v1
