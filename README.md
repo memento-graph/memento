@@ -1,6 +1,6 @@
 # Memento
 
-**Any model, same memory.** A bitemporal knowledge graph that gives AI agents persistent, structured memory across LLM providers, clients, and conversations.
+**Any model, same memory.** A bitemporal knowledge graph (tracking when facts were true vs. when they were learned) that gives AI agents persistent, structured memory across LLM providers, clients, and conversations.
 
 Most AI memory systems dump text into a vector store and retrieve by similarity. Memento builds a **knowledge graph** that resolves entities, detects contradictions, tracks time, and composes answers from structured relationships rather than raw chunks.
 
@@ -103,7 +103,7 @@ Agent / LLM
 Retrieval Engine    Ingestion Pipeline
   │                    │
   ▼                    ▼
-Temporal Knowledge Graph (SQLite)
+Bitemporal Knowledge Graph (SQLite)
   │
   ├── Consolidation Engine (decay, dedup, prune)
   ├── Verbatim Fallback (FTS5 + vector search)
