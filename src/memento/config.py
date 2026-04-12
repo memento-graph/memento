@@ -15,7 +15,7 @@ def _default_db_path() -> Path:
 class EmbeddingConfig:
     """Configuration for the embedding model."""
 
-    provider: str = "sentence-transformers"  # "sentence-transformers" or "openai"
+    provider: str = "auto"  # "auto", "sentence-transformers", or "openai"
     model: str = "all-MiniLM-L6-v2"
     dimension: int = 384
     openai_api_key: str | None = None

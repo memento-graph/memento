@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Protocol
 
 import numpy as np
@@ -51,22 +52,30 @@ class SentenceTransformerEmbedder:
 
 
 class OpenAIEmbedder:
-    """Embedder using OpenAI's embedding API."""
+    """Embedder using OpenAI's embedding API (or any OpenAI-compatible endpoint)."""
 
     def __init__(
-        self, model: str = "text-embedding-3-small", api_key: str | None = None
+        self,
+        model: str = "text-embedding-3-small",
+        api_key: str | None = None,
+        base_url: str | None = None,
+        dimension: int = 384,
     ) -> None:
         try:
             from openai import OpenAI
         except ImportError:
             raise ImportError(
                 "openai is required for API embeddings. "
-                "Install with: pip install openai"
+                "Install with: pip install memento-memory[openai]"
             )
-        self._client = OpenAI(api_key=api_key)
+        kwargs = {}
+        if api_key:
+            kwargs["api_key"] = api_key
+        if base_url:
+            kwargs["base_url"] = base_url
+        self._client = OpenAI(**kwargs)
         self._model = model
-        # text-embedding-3-small default is 1536, but we request 384 for consistency
-        self._dimension = 384
+        self._dimension = dimension
 
     @property
     def dimension(self) -> int:
@@ -88,11 +97,102 @@ class OpenAIEmbedder:
         ]
 
 
+class GeminiEmbedder:
+    """Embedder using Google's Gemini embedding API."""
+
+    def __init__(
+        self,
+        model: str = "text-embedding-004",
+        api_key: str | None = None,
+        dimension: int = 384,
+    ) -> None:
+        try:
+            from google import genai
+        except ImportError:
+            raise ImportError(
+                "google-genai is required for Gemini embeddings. "
+                "Install with: pip install memento-memory[gemini]"
+            )
+        self._client = genai.Client(api_key=api_key or os.environ.get("GOOGLE_API_KEY"))
+        self._model = model
+        self._dimension = dimension
+
+    @property
+    def dimension(self) -> int:
+        return self._dimension
+
+    def embed(self, text: str) -> np.ndarray:
+        result = self._client.models.embed_content(
+            model=self._model,
+            contents=text,
+            config={"output_dimensionality": self._dimension},
+        )
+        return np.array(result.embeddings[0].values, dtype=np.float32)
+
+    def embed_batch(self, texts: list[str]) -> list[np.ndarray]:
+        return [self.embed(t) for t in texts]
+
+
 def create_embedder(config: EmbeddingConfig) -> Embedder:
-    """Factory function to create the configured embedder."""
+    """Factory function to create the configured embedder.
+
+    If provider is "auto" (the default), tries sentence-transformers first
+    (free, local), then falls back to whichever API key is available.
+    """
+    if config.provider == "auto":
+        # Try local first (free, no API calls)
+        try:
+            return SentenceTransformerEmbedder(model_name=config.model)
+        except ImportError:
+            pass
+
+        # Fall back to whichever API key is set
+        api_key = config.openai_api_key or os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            logger.info("Using OpenAI embeddings (sentence-transformers not installed)")
+            return OpenAIEmbedder(api_key=api_key)
+
+        if os.environ.get("GOOGLE_API_KEY"):
+            logger.info("Using Gemini embeddings (sentence-transformers not installed)")
+            return GeminiEmbedder()
+
+        # Ollama via OpenAI-compatible API
+        base_url = os.environ.get("MEMENTO_LLM_BASE_URL")
+        provider = os.environ.get("MEMENTO_LLM_PROVIDER", "")
+        if provider == "ollama" or (base_url and "localhost" in base_url):
+            logger.info("Using Ollama embeddings (sentence-transformers not installed)")
+            return OpenAIEmbedder(
+                model="nomic-embed-text",
+                base_url=base_url or "http://localhost:11434/v1",
+                api_key="ollama",
+                dimension=384,
+            )
+
+        raise ImportError(
+            "No embedding provider available. Either:\n"
+            "  pip install memento-memory[local-embeddings]  (local, no API calls)\n"
+            "  Set OPENAI_API_KEY  (OpenAI embeddings)\n"
+            "  Set GOOGLE_API_KEY  (Gemini embeddings)\n"
+            "  Set MEMENTO_LLM_PROVIDER=ollama  (Ollama embeddings)"
+        )
+
     if config.provider == "sentence-transformers":
         return SentenceTransformerEmbedder(model_name=config.model)
     elif config.provider == "openai":
-        return OpenAIEmbedder(model=config.model, api_key=config.openai_api_key)
+        return OpenAIEmbedder(
+            model=config.model,
+            api_key=config.openai_api_key,
+            base_url=os.environ.get("MEMENTO_EMBEDDING_BASE_URL"),
+        )
+    elif config.provider == "gemini":
+        return GeminiEmbedder(model=config.model)
+    elif config.provider in ("ollama", "openai-compatible"):
+        base_url = os.environ.get("MEMENTO_EMBEDDING_BASE_URL") or os.environ.get("MEMENTO_LLM_BASE_URL") or "http://localhost:11434/v1"
+        return OpenAIEmbedder(
+            model=config.model or "nomic-embed-text",
+            base_url=base_url,
+            api_key=os.environ.get("OPENAI_API_KEY") or "ollama",
+            dimension=config.dimension,
+        )
     else:
         raise ValueError(f"Unknown embedding provider: {config.provider}")
