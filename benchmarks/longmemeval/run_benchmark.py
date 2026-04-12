@@ -516,6 +516,9 @@ def run_benchmark(
     resume: bool = True,
     token_budget: int = 4000,
     answer_model: str | None = None,
+    answer_provider: str | None = None,
+    answer_base_url: str | None = None,
+    answer_api_key: str | None = None,
 ) -> None:
     """Run the full benchmark: ingest → recall → answer → save.
 
@@ -528,6 +531,9 @@ def run_benchmark(
         resume:        Skip questions already present in *output_path*
         token_budget:  Token budget for Memento recall()
         answer_model:  Override the LLM model used for answer generation
+        answer_provider: LLM provider for answer generation (separate from ingestion)
+        answer_base_url: Base URL for answer generation (for OpenAI-compatible APIs)
+        answer_api_key:  API key for answer generation provider
     """
     dataset = load_dataset(variant)
     if category:
@@ -556,10 +562,22 @@ def run_benchmark(
         return
 
     # Determine LLM for answer generation
-    llm_config = LLMConfig()
-    llm_client = create_llm_client(llm_config)
-    provider = llm_config.provider or _detect_provider()
-    model = answer_model or get_default_model(provider, "chat")
+    if answer_provider:
+        # Use a separate provider for answer generation (e.g., Together AI)
+        # This keeps MemoryStore using its own provider for entity extraction
+        answer_llm_config = LLMConfig()
+        answer_llm_config.provider = answer_provider
+        answer_llm_config.base_url = answer_base_url
+        if answer_api_key:
+            answer_llm_config.api_key = answer_api_key
+        llm_client = create_llm_client(answer_llm_config)
+        provider = answer_provider
+        model = answer_model or get_default_model(provider, "chat")
+    else:
+        llm_config = LLMConfig()
+        llm_client = create_llm_client(llm_config)
+        provider = llm_config.provider or _detect_provider()
+        model = answer_model or get_default_model(provider, "chat")
 
     print()
     print("=" * 60)
@@ -976,6 +994,18 @@ def main() -> None:
         "--answer-model", default=None,
         help="Override the LLM model for answer generation",
     )
+    run.add_argument(
+        "--answer-provider", default=None,
+        help="LLM provider for answer generation (e.g., openai-compatible)",
+    )
+    run.add_argument(
+        "--answer-base-url", default=None,
+        help="Base URL for answer generation (e.g., https://api.together.xyz/v1)",
+    )
+    run.add_argument(
+        "--answer-api-key", default=None,
+        help="API key for answer generation provider",
+    )
 
     # evaluate -----------------------------------------------------------
     ev = sub.add_parser("evaluate", help="Evaluate results with GPT-4o judge")
@@ -1010,6 +1040,9 @@ def main() -> None:
             resume=not args.no_resume,
             token_budget=args.token_budget,
             answer_model=args.answer_model,
+            answer_provider=args.answer_provider,
+            answer_base_url=args.answer_base_url,
+            answer_api_key=args.answer_api_key,
         )
 
     elif args.command == "evaluate":

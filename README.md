@@ -159,6 +159,22 @@ Bitemporal Knowledge Graph (SQLite)
 
 Full methodology and reproduction steps: [BENCHMARKS.md](BENCHMARKS.md)
 
+## Web Viewer
+
+Browse the knowledge graph in your browser with a built-in web UI:
+
+```bash
+pip install memento-memory[web]
+memento-web
+```
+
+Open http://localhost:8766. The viewer reads from the same `~/.memento/memento.db` that `memento-mcp` writes to — see your agent's memories update in real time.
+
+- **Entity list** — search and filter by type (person, organization, project, etc.)
+- **Detail view** — properties, relationships, version history, confidence scores
+- **Graph view** — interactive force-directed visualization with d3.js (zoom, drag, click to navigate)
+- **Timeline view** — when facts were learned vs when they were true (bitemporal)
+
 ## CLI
 
 Admin and introspection tools for the knowledge graph:
@@ -184,7 +200,7 @@ memento delete <id> --hard              # Hard delete with receipt
 | `MEMENTO_LLM_API_KEY` | — | API key (or use provider-specific env vars) |
 | `MEMENTO_LLM_BASE_URL` | — | For Ollama/vLLM endpoints |
 | `MEMENTO_DB_PATH` | `~/.memento/memento.db` | SQLite database path |
-| `MEMENTO_EMBEDDING_PROVIDER` | `sentence-transformers` | `sentence-transformers` or `openai` |
+| `MEMENTO_EMBEDDING_PROVIDER` | `auto` | `auto`, `sentence-transformers`, `openai`, `gemini`, `ollama` |
 | `ANTHROPIC_API_KEY` | — | Anthropic-specific key |
 | `OPENAI_API_KEY` | — | OpenAI-specific key |
 | `GOOGLE_API_KEY` | — | Gemini-specific key |
