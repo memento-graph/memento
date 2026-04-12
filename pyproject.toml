@@ -35,6 +35,10 @@ gemini = ["google-genai>=1.0.0"]
 local-embeddings = [
     "sentence-transformers>=3.0.0",
 ]
+web = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -43,6 +47,7 @@ dev = [
 [project.scripts]
 memento = "memento.cli:main"
 memento-mcp = "memento.mcp_server:main"
+memento-web = "memento.web:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/memento"]
