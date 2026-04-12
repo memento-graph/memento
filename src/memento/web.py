@@ -372,8 +372,8 @@ a:hover { text-decoration: underline; }
 /* Graph view */
 .graph-container { width: 100%; height: calc(100vh - 56px); }
 .graph-container svg { width: 100%; height: 100%; }
-.node-label { font-size: 11px; fill: var(--text); pointer-events: none; }
-.link-label { font-size: 9px; fill: var(--text-muted); }
+.node-label { font-size: 11px; fill: var(--text); pointer-events: none; paint-order: stroke; stroke: #0d1117; stroke-width: 3px; stroke-linejoin: round; }
+.link-label { font-size: 9px; fill: var(--text-muted); pointer-events: none; paint-order: stroke; stroke: #0d1117; stroke-width: 2px; stroke-linejoin: round; }
 
 /* Timeline view */
 .timeline-event { display: grid; grid-template-columns: 140px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
@@ -592,16 +592,30 @@ async function renderGraph(centerId) {
     location: '#f0883e', concept: '#e3b341', event: '#f85149',
   };
 
+  // Scale forces with node count so dense graphs get more breathing room
+  const nodeCount = data.nodes.length;
+  const linkDistance = Math.max(140, 80 + Math.sqrt(nodeCount) * 8);
+  const chargeStrength = -Math.max(600, 200 + nodeCount * 4);
+  const collisionRadius = 40;
+
   const simulation = d3.forceSimulation(data.nodes)
-    .force('link', d3.forceLink(data.links).id(d => d.id).distance(100))
-    .force('charge', d3.forceManyBody().strength(-300))
+    .force('link', d3.forceLink(data.links).id(d => d.id).distance(linkDistance))
+    .force('charge', d3.forceManyBody().strength(chargeStrength))
     .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(30));
+    .force('collision', d3.forceCollide().radius(collisionRadius))
+    .force('x', d3.forceX(width / 2).strength(0.05))
+    .force('y', d3.forceY(height / 2).strength(0.05));
 
   const g = svg.append('g');
 
-  // Zoom
-  svg.call(d3.zoom().scaleExtent([0.1, 4]).on('zoom', e => g.attr('transform', e.transform)));
+  // Zoom — tracks current scale so we can show/hide labels based on zoom
+  let currentZoom = 1;
+  svg.call(d3.zoom().scaleExtent([0.1, 4]).on('zoom', e => {
+    g.attr('transform', e.transform);
+    currentZoom = e.transform.k;
+    g.selectAll('.node-label').style('display', currentZoom < 0.6 ? 'none' : null);
+    g.selectAll('.link-label').style('display', currentZoom < 1.0 ? 'none' : null);
+  }));
 
   const link = g.append('g').selectAll('line')
     .data(data.links).join('line')
@@ -619,6 +633,17 @@ async function renderGraph(centerId) {
     .data(data.nodes).join('g')
     .attr('cursor', 'pointer')
     .on('click', (e, d) => selectEntity(d.id))
+    .on('mouseover', function(e, d) {
+      d3.select(this).select('circle').attr('stroke', '#fff').attr('stroke-width', 2);
+      d3.select(this).select('.node-label').style('display', null).style('font-weight', 'bold');
+    })
+    .on('mouseout', function(e, d) {
+      if (d.id !== centerId) {
+        d3.select(this).select('circle').attr('stroke', 'none');
+      }
+      d3.select(this).select('.node-label').style('font-weight', null)
+        .style('display', currentZoom < 0.6 ? 'none' : null);
+    })
     .call(d3.drag()
       .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
       .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
@@ -626,7 +651,7 @@ async function renderGraph(centerId) {
     );
 
   node.append('circle')
-    .attr('r', d => d.id === centerId ? 12 : 8)
+    .attr('r', d => d.id === centerId ? 14 : 9)
     .attr('fill', d => typeColor[d.type] || '#8b949e')
     .attr('stroke', d => d.id === centerId ? '#fff' : 'none')
     .attr('stroke-width', 2);
@@ -634,7 +659,8 @@ async function renderGraph(centerId) {
   node.append('text')
     .attr('class', 'node-label')
     .attr('dx', 14).attr('dy', 4)
-    .text(d => d.name);
+    .text(d => d.name.length > 24 ? d.name.slice(0, 22) + '…' : d.name)
+    .append('title').text(d => d.name);
 
   simulation.on('tick', () => {
     link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
