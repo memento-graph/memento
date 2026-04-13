@@ -195,13 +195,15 @@ Memento is model-agnostic. The same knowledge graph works across providers — o
 | Model | Provider | Overall | Task-avg |
 |---|---|--:|--:|
 | **Claude Sonnet 4.6** | Anthropic | **90.8%** | **92.2%** |
+| **MiniMax M2.7** | Together (MiniMax) | **90.6%** | **91.2%** |
 | Qwen 3 235B A22B | Together (Alibaba) | 79.6% | 80.1% |
 
-**50-question stratified samples** (for a quick read; small-sample numbers can be noisy — see Qwen's drop from 94.0% on 50 to 79.6% on 500):
+MiniMax M2.7 essentially ties Claude Sonnet 4.6 on the full 500-question run. This is the real "any model, same memory" payoff: when the memory layer is structured and the retrieval is strong, the answer LLM doesn't need to be the flagship — a competitive open-source model matches proprietary performance.
+
+**50-question stratified samples** (small-sample numbers can be noisy — see Qwen's drop from 94.0% on 50 to 79.6% on 500):
 
 | Model | Provider | Overall | Task-avg |
 |---|---|--:|--:|
-| MiniMax M2.7 | Together (MiniMax) | 94.0% | 93.8% |
 | Llama 3.3 70B | Together (Meta) | 88.0% | 87.5% |
 | Gemma 4 31B | Together (Google) | 86.0% | 85.8% |
 | DeepSeek V3.1 | Together (DeepSeek) | 84.0% | 83.3% |
