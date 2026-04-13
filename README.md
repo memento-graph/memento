@@ -165,7 +165,7 @@ Bitemporal Knowledge Graph (SQLite)
 
 ## Benchmarks
 
-**90.8% overall accuracy on LongMemEval** with Claude Sonnet 4.6 (500 questions):
+**90.8% end-to-end accuracy on LongMemEval** with Claude Sonnet 4.6 (500 questions, GPT-4o judge):
 
 | Category | Accuracy |
 |---|--:|
@@ -177,12 +177,14 @@ Bitemporal Knowledge Graph (SQLite)
 | Multi-session | 86.5% |
 | **Task-averaged** | **92.2%** |
 
+> **What this number actually measures.** This is the full pipeline, not a retrieval-only metric like `recall@k` or `R@5`. For each of the 500 questions, we ingest the haystack sessions, retrieve context via `store.recall()`, generate an answer with the LLM, and have GPT-4o judge the answer against the reference using LongMemEval's task-specific judge prompts. A question only counts as correct if the retrieved context was sufficient *and* the LLM composed a correct answer from it *and* the judge agrees it matches the reference. No per-question tuning, no hand-curated prompts, no oracle routing — the harness is one file: [`benchmarks/longmemeval/run_benchmark.py`](benchmarks/longmemeval/run_benchmark.py). Reproduce with `python run_benchmark.py run --variant oracle`.
+
 ### vs. baselines
 
-To isolate what structured memory contributes, we ran the same 500 questions through two simpler approaches. Same Claude Sonnet 4.6 answer model, same GPT-4o judge — only the memory layer differs.
+To isolate what structured memory contributes, we ran the same 500 questions through two simpler approaches. Same dataset, same answer model (Claude Sonnet 4.6), same `ANSWER_PROMPT`, same 4,000-token context budget, same GPT-4o judge — only the recall layer differs.
 
-- **Vector store** — standard RAG (sentence-transformers embeddings, top-30 cosine similarity)
-- **Markdown file** — LLM-distilled facts appended to a markdown file (the CLAUDE.md / USER.md / mem0 pattern)
+- **Vector store** — a minimal in-memory RAG system. Each haystack turn is embedded individually with `sentence-transformers/all-MiniLM-L6-v2` (the same model Memento uses) and stored in a numpy array. At query time, cosine similarity returns the top-30 most similar turns, which are concatenated (with their session dates) into the context block. No chunking, no reranker, no graph — pure similarity search.
+- **Markdown file** — simulates the CLAUDE.md / USER.md / mem0 pattern. For each session, an LLM distills the conversation into bulleted facts tagged with the session date and appends them to a single markdown file. At query time, the full file is truncated to the token budget and passed into the answer prompt. This is how most AI coding agents handle persistent memory today.
 
 | Category | Markdown | Vector | **Memento** |
 |---|--:|--:|--:|
@@ -206,18 +208,10 @@ Memento is model-agnostic. The same knowledge graph works across providers — o
 |---|---|--:|--:|
 | **Claude Sonnet 4.6** | Anthropic | **90.8%** | **92.2%** |
 | **MiniMax M2.7** | Together (MiniMax) | **90.6%** | **91.2%** |
+| GLM 5.1 FP4 | Together (Zhipu) | 87.4% | 90.2% |
 | Qwen 3 235B A22B | Together (Alibaba) | 79.6% | 80.1% |
 
-MiniMax M2.7 essentially ties Claude Sonnet 4.6 on the full 500-question run. When the memory layer is structured and retrieval is strong, the answer model doesn't need to be the flagship — a competitive open-source model matches proprietary performance.
-
-**50-question stratified samples** (small-sample numbers can be noisy — see Qwen's drop from 94.0% on 50 to 79.6% on 500):
-
-| Model | Provider | Overall | Task-avg |
-|---|---|--:|--:|
-| Llama 3.3 70B | Together (Meta) | 88.0% | 87.5% |
-| Gemma 4 31B | Together (Google) | 86.0% | 85.8% |
-| DeepSeek V3.1 | Together (DeepSeek) | 84.0% | 83.3% |
-| Kimi K2.5 | Together (Moonshot) | 70.0% | 70.0% |
+MiniMax M2.7 essentially ties Claude Sonnet 4.6 on the full 500-question run, and GLM 5.1 is within a few points. When the memory layer is structured and retrieval is strong, the answer model doesn't need to be the flagship — a competitive open-source model matches proprietary performance.
 
 Full methodology and reproduction steps: [BENCHMARKS.md](BENCHMARKS.md)
 

@@ -6,6 +6,20 @@ I have been evaluating Memento on [LongMemEval](https://github.com/xiaowu0162/lo
 
 **Paper:** "LongMemEval: Benchmarking Chat Assistants on Long-Term Interactive Memory" — [arXiv](https://arxiv.org/abs/2410.10813)
 
+### What "accuracy" means here
+
+Every number in this document is **end-to-end accuracy**, not retrieval-only. There's an important distinction:
+
+- **Retrieval metrics** (`recall@k`, `R@5`, MRR, nDCG) measure whether the correct evidence was somewhere in the top-k retrieved items. They're typically 90–98% on well-tuned systems and are relatively easy to win — any competent vector store gets high scores on them.
+- **End-to-end accuracy** measures whether the full pipeline produces a correct answer. A question is only counted as correct if:
+  1. The retrieval step surfaced enough evidence to answer, *and*
+  2. The LLM composed a correct answer from the retrieved context, *and*
+  3. An independent judge model agreed the answer matches the reference.
+
+All three stages have to succeed. Retrieval failures, reasoning failures, and formatting mismatches all count as wrong. The full 500-question run is uniform: no per-question tuning, no hand-curated prompts, no oracle routing, one harness file ([`benchmarks/longmemeval/run_benchmark.py`](benchmarks/longmemeval/run_benchmark.py)), one answer model, one judge.
+
+This matters because benchmark numbers on LongMemEval from different projects are often not directly comparable — some report retrieval-only metrics, some report on 50-question samples, some hand-tune per category. Everything below is the same thing across every row: ingest → recall → generate → judge, 500 questions, reproducible.
+
 ### Results
 
 **Oracle variant, 500 questions, GPT-4o judge:**
@@ -23,12 +37,13 @@ I have been evaluating Memento on [LongMemEval](https://github.com/xiaowu0162/lo
 
 ### Comparison vs Baselines
 
-To isolate what Memento's knowledge graph actually contributes, we ran the same 500 oracle questions through two simpler memory strategies using the same answer model (Claude Sonnet 4.6) and the same GPT-4o judge. Only the memory layer differs.
+To isolate what Memento's knowledge graph actually contributes, we ran the same 500 oracle questions through two simpler memory strategies. Only the recall layer differs — every baseline uses the same dataset, the same haystack ingestion loop, the same answer model (Claude Sonnet 4.6), the same `ANSWER_PROMPT`, the same 4,000-token context budget, and the same GPT-4o judge with task-specific prompts.
 
-**Baselines:**
+**Vector store baseline** ([`baselines/run_vector_baseline.py`](benchmarks/longmemeval/baselines/run_vector_baseline.py)) — a minimal in-memory RAG system. Each haystack conversation turn is embedded individually with `sentence-transformers/all-MiniLM-L6-v2` (the same model Memento uses) and stored as a `(text, embedding)` pair in a numpy array. At query time, the question is embedded, cosine similarity is computed against all turns via a single matrix multiplication, and the top-30 results are concatenated (each turn prefixed by its `[Conversation date: ...]` header) into the context block. No chunking, no reranker, no graph, no temporal awareness — pure similarity search.
 
-- **Vector store** — Standard RAG. Each conversation turn is chunked and embedded with `sentence-transformers/all-MiniLM-L6-v2`. For each question, we retrieve the top-30 most similar chunks by cosine similarity and pass them to the answer LLM. No entity resolution, no graph, no temporal reasoning — just text similarity.
-- **Markdown file** — Simulates the CLAUDE.md / USER.md / mem0 pattern: for each session, an LLM distills the conversation into bulleted facts and appends them to a markdown file. For each question, the full file is passed as context. This is how most AI coding agents handle persistent memory today.
+**Markdown baseline** ([`baselines/run_markdown_baseline.py`](benchmarks/longmemeval/baselines/run_markdown_baseline.py)) — a per-session LLM extraction pipeline. For each conversation session, an LLM is prompted to extract bulleted facts worth remembering (with each bullet tagged by session date) and those bullets are appended to a single markdown file. At query time, the entire accumulated markdown file is truncated to a 4,000-token budget and passed into the answer prompt. This simulates the CLAUDE.md / USER.md / mem0 "append facts to a file" pattern that most AI coding agents use for persistent memory today.
+
+The only thing that changes between the three runs is the recall step — how the system stores and retrieves information before handing it to the answer LLM. That isolates the contribution of structured memory from everything else in the pipeline.
 
 | Category | Markdown | Vector Store | Memento |
 |---|--:|--:|--:|
