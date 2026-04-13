@@ -167,19 +167,24 @@ Bitemporal Knowledge Graph (SQLite)
 | Multi-session | 86.5% |
 | **Task-averaged** | **92.2%** |
 
-### vs Flat Vector Store
+### vs Baselines
 
-To isolate what structured memory contributes, we ran the same 500 questions through a standard RAG baseline — `sentence-transformers/all-MiniLM-L6-v2` embeddings, cosine similarity, top-30 retrieval, same Claude Sonnet 4.6 answer model, same GPT-4o judge. Only the memory layer differs.
+To isolate what structured memory contributes, we ran the same 500 questions through two simpler approaches. Same Claude Sonnet 4.6 answer model, same GPT-4o judge — only the memory layer differs.
 
-| Category | Vector Store | Memento | Δ |
+- **Vector store** — standard RAG (sentence-transformers embeddings, top-30 cosine similarity)
+- **Markdown file** — LLM-distilled facts appended to a markdown file (the CLAUDE.md / USER.md / mem0 pattern)
+
+| Category | Markdown | Vector | **Memento** |
 |---|--:|--:|--:|
-| Single-session (all 3) | 94–100% | 93–98% | ~tie |
-| Knowledge update | 87.2% | 88.5% | +1.3 |
-| Multi-session | **67.7%** | **86.5%** | **+18.8** |
-| Temporal reasoning | **66.9%** | **89.5%** | **+22.6** |
-| **Overall** | **79.8%** | **90.8%** | **+11.0** |
+| Single-session (assistant) | 41.1% | 100.0% | **98.2%** |
+| Single-session (preference) | 100.0% | 100.0% | 93.3% |
+| Single-session (user) | 94.3% | 94.3% | **97.1%** |
+| Knowledge update | 88.5% | 87.2% | **88.5%** |
+| Multi-session | 80.5% | 67.7% | **86.5%** |
+| Temporal reasoning | 82.0% | 66.9% | **89.5%** |
+| **Overall** | 80.8% | 79.8% | **90.8%** |
 
-Similarity search handles single-conversation lookups fine. It breaks down on multi-session synthesis and temporal reasoning — the two categories where structured memory earns its keep.
+Vector retrieval handles single-conversation lookups fine but falls apart on multi-session synthesis and temporal reasoning. Markdown extraction captures some cross-session structure but loses ~60% of assistant-side questions because LLM distillation is biased toward user statements. Memento is the only approach without a catastrophic failure — its worst category is 86.5% vs 41.1% (markdown) and 66.9% (vector).
 
 ### Any Model, Same Memory
 

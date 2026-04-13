@@ -28,26 +28,28 @@ To isolate what Memento's knowledge graph actually contributes, we ran the same 
 **Baselines:**
 
 - **Vector store** — Standard RAG. Each conversation turn is chunked and embedded with `sentence-transformers/all-MiniLM-L6-v2`. For each question, we retrieve the top-30 most similar chunks by cosine similarity and pass them to the answer LLM. No entity resolution, no graph, no temporal reasoning — just text similarity.
-- **Markdown file** *(in progress)* — Simulates the CLAUDE.md / USER.md pattern: an LLM distills each conversation into bulleted facts and appends them to a markdown file. For each question, the full file is passed as context. This is how most AI coding agents handle persistent memory today.
+- **Markdown file** — Simulates the CLAUDE.md / USER.md / mem0 pattern: for each session, an LLM distills the conversation into bulleted facts and appends them to a markdown file. For each question, the full file is passed as context. This is how most AI coding agents handle persistent memory today.
 
-| Category | Vector Store | Memento | Δ |
+| Category | Markdown | Vector Store | Memento |
 |---|--:|--:|--:|
-| single-session-assistant | 100.0% | 98.2% | −1.8 |
-| single-session-preference | 100.0% | 93.3% | −6.7 |
-| single-session-user | 94.3% | 97.1% | +2.8 |
-| knowledge-update | 87.2% | 88.5% | +1.3 |
-| multi-session | **67.7%** | **86.5%** | **+18.8** |
-| temporal-reasoning | **66.9%** | **89.5%** | **+22.6** |
-| **Overall** | **79.8%** | **90.8%** | **+11.0** |
-| **Task-averaged** | **86.0%** | **92.2%** | **+6.2** |
+| single-session-assistant | **41.1%** | 100.0% | 98.2% |
+| single-session-preference | 100.0% | 100.0% | 93.3% |
+| single-session-user | 94.3% | 94.3% | 97.1% |
+| knowledge-update | 88.5% | 87.2% | 88.5% |
+| multi-session | 80.5% | 67.7% | **86.5%** |
+| temporal-reasoning | 82.0% | 66.9% | **89.5%** |
+| **Overall** | **80.8%** | **79.8%** | **90.8%** |
+| **Task-averaged** | **81.0%** | **86.0%** | **92.2%** |
 
 **What the gaps tell us:**
 
-- **Single-session questions are tied.** Both systems trivially find a fact within one conversation. Vector retrieval is enough when the needle is in one haystack.
-- **Preference questions favor the vector baseline slightly** (100% vs 93.3%). These questions just need to find *any* relevant turn, and top-30 similarity search rarely misses.
-- **Multi-session and temporal reasoning are where Memento wins decisively** — +18.8pp and +22.6pp respectively. These questions require *composing* information across conversations: knowing that John who was mentioned in session 3 is the same John from session 7, ordering events by date, or preferring the most recent value. Flat vector search has no way to connect chunks across conversations or reason about time.
+- **Single-session questions are mostly easy for all three approaches** — except the markdown baseline, which catastrophically drops to 41.1% on assistant-side questions. The LLM fact extractor is biased toward capturing what the *user* said and loses assistant statements. This is a structural weakness of LLM-distilled summaries: extraction is lossy, and information that doesn't match the "memorable fact" pattern gets dropped.
+- **Vector retrieval is surprisingly strong on single-session questions** (94–100%). When the needle is in one haystack, cosine similarity just works.
+- **Vector falls apart on multi-session and temporal reasoning** (67.7% and 66.9%). These questions require composing information across conversations — flat similarity search has no way to connect chunks or reason about time.
+- **Markdown holds up better than vector on multi-session and temporal** (80.5% and 82.0%) because the LLM extraction captures some structure across sessions. But it pays the price in the extraction step, catastrophically missing certain categories.
+- **Memento is the only approach without a catastrophic category failure.** Its worst category is 86.5% vs 41.1% (markdown) and 66.9% (vector). The knowledge graph retains all facts with their provenance and temporal anchoring, so retrieval doesn't depend on an upfront "what's memorable" decision or a pure similarity signal.
 
-The overall 11-point gap isolates the value of structured memory. Similarity search is sufficient for simple lookups but breaks down when the answer requires synthesis.
+The overall 10-point gap over both baselines isolates the value of structured, bitemporal memory. Vector and markdown approaches each win on specific categories, but neither covers the full space. Memento's worst category is still 86.5% — every approach to memory eventually fails somewhere, but structure keeps the floor high.
 
 ### Question Categories
 
