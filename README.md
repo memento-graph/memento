@@ -5,17 +5,17 @@
 ![GitHub License](https://img.shields.io/github/license/shane-farkas/memento-memory)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/shane-farkas/memento-memory/test.yml?label=tests)
 
-**Any model, same memory.** A bitemporal knowledge graph (tracking when facts were true vs. when they were learned) that gives AI agents persistent, structured memory across LLM providers, clients, and conversations.
+**Any model, same memory.** A bitemporal knowledge graph — tracking when facts were true vs. when they were learned — that gives AI agents persistent, structured memory across LLM providers, clients, and conversations.
 
-Most AI memory systems dump text into a vector store and retrieve by similarity. Memento builds a **knowledge graph** that resolves entities, detects contradictions, tracks time, and composes answers from structured relationships rather than raw chunks.
+Most AI memory systems dump text into a vector store and retrieve by similarity. Memento builds a knowledge graph that resolves entities, detects contradictions, tracks time, and composes answers from structured relationships rather than raw chunks.
 
 Works with any MCP-compatible client (Claude Desktop, Cursor, Claude Code, Cline, Windsurf, OpenClaw, Continue.dev) and any LLM backend (Claude, GPT, Gemini, Llama, Mistral, Ollama, or any OpenAI-compatible endpoint).
 
 **90.8% overall accuracy, 92.2% task average on [LongMemEval](BENCHMARKS.md)** (500 questions, GPT-4o judge) — a benchmark for long-term conversational memory covering temporal reasoning, knowledge updates, multi-session recall, and preference tracking.
 
-## Quick Start
+## Quick start
 
-### MCP Server
+### MCP server
 
 ```bash
 pip install memento-memory[anthropic]
@@ -23,7 +23,7 @@ export ANTHROPIC_API_KEY=your-key
 memento-mcp
 ```
 
-Set your API key as an environment variable in your shell profile (e.g. `~/.zshrc`, `~/.bashrc`, or Windows system environment variables) rather than hardcoding it in config files:
+Set your API key in your shell profile (`~/.zshrc`, `~/.bashrc`, or Windows system environment variables) rather than hardcoding it in config files:
 
 ```bash
 export ANTHROPIC_API_KEY=your-key
@@ -42,13 +42,13 @@ Then add to your MCP client config (e.g., Claude Desktop `claude_desktop_config.
 }
 ```
 
-This keeps your key out of config files that may be synced, committed to dotfile repos, or shared in screenshots. Variable expansion is supported by Claude Desktop, Cursor, Cline, Windsurf, and Continue.dev; for clients that don't expand `${VAR}`, launch the client from a shell where the variable is already set.
+This keeps your key out of config files that may be synced, committed to dotfile repos, or shared in screenshots. Variable expansion is supported by Claude Desktop, Cursor, Cline, Windsurf, and Continue.dev. For clients that don't expand `${VAR}`, launch the client from a shell where the variable is already set.
 
 That's it. The agent now has persistent memory and calls `memory_ingest` to store facts and `memory_recall` to retrieve them. Every MCP client on the same machine shares the same knowledge graph.
 
-Memories are stored locally in a SQLite database at `~/.memento/memento.db` (override with `MEMENTO_DB_PATH`). Nothing leaves your machine unless you explicitly configure a cloud LLM provider for entity extraction.
+Memories are stored locally in a SQLite database at `~/.memento/memento.db` (override with `MEMENTO_DB_PATH`). Nothing leaves your machine unless you configure a cloud LLM provider for entity extraction.
 
-### Compatible Clients
+### Compatible clients
 
 Any MCP-compatible client works with Memento. Add the config block above to:
 
@@ -126,7 +126,7 @@ session.on_turn("He mentioned a new project.")
 session.end()  # Flushes through ingestion pipeline
 ```
 
-## LLM Providers
+## LLM providers
 
 Memento is provider-agnostic. Swap the backend via config — no code changes.
 
@@ -138,7 +138,7 @@ Memento is provider-agnostic. Swap the backend via config — no code changes.
 | **Ollama** (fully local) | `pip install memento-memory[openai]` | `MEMENTO_LLM_PROVIDER=ollama` |
 | **Any OpenAI-compatible** | `pip install memento-memory[openai]` | `MEMENTO_LLM_PROVIDER=openai-compatible`, `MEMENTO_LLM_BASE_URL=...` |
 
-## How It Works
+## How it works
 
 ```
 Agent / LLM
@@ -155,13 +155,13 @@ Bitemporal Knowledge Graph (SQLite)
 ```
 
 - **Entity resolution** — "John," "John Smith," and "the Alpha guy" become one node. Tiered matching: exact/fuzzy/phonetic (cheap) before embedding similarity and LLM tiebreaker (expensive).
-- **Contradiction detection** — flags when new facts conflict with existing ones
-- **Bitemporal model** — every fact tracks when it was true (valid time) and when the system learned it (transaction time)
+- **Contradiction detection** — flags when new facts conflict with existing ones.
+- **Bitemporal model** — every fact tracks when it was true (valid time) and when the system learned it (transaction time).
 - **Immutable history** — facts are never deleted, only superseded. Full audit trail.
-- **Verbatim fallback** — raw text stored alongside the graph, so extraction loss doesn't mean information loss
-- **Compositional retrieval** — "What should I know before my meeting with John?" traverses the graph, not just retrieves chunks
-- **Confidence decay** — multiplicative decay prevents artificial confidence floors from repeated confirmations
-- **Consolidation** — background engine decays stale info, merges duplicates, prunes orphans
+- **Verbatim fallback** — raw text stored alongside the graph, so extraction loss doesn't mean information loss.
+- **Compositional retrieval** — "What should I know before my meeting with John?" traverses the graph, not just retrieves chunks.
+- **Confidence decay** — multiplicative decay prevents artificial confidence floors from repeated confirmations.
+- **Consolidation** — background engine decays stale info, merges duplicates, prunes orphans.
 
 ## Benchmarks
 
@@ -177,7 +177,7 @@ Bitemporal Knowledge Graph (SQLite)
 | Multi-session | 86.5% |
 | **Task-averaged** | **92.2%** |
 
-### vs Baselines
+### vs. baselines
 
 To isolate what structured memory contributes, we ran the same 500 questions through two simpler approaches. Same Claude Sonnet 4.6 answer model, same GPT-4o judge — only the memory layer differs.
 
@@ -194,9 +194,9 @@ To isolate what structured memory contributes, we ran the same 500 questions thr
 | Temporal reasoning | 82.0% | 66.9% | **89.5%** |
 | **Overall** | 80.8% | 79.8% | **90.8%** |
 
-Vector retrieval handles single-conversation lookups fine but falls apart on multi-session synthesis and temporal reasoning. Markdown extraction captures some cross-session structure but loses ~60% of assistant-side questions because LLM distillation is biased toward user statements. Memento is the only approach without a catastrophic failure — its worst category is 86.5% vs 41.1% (markdown) and 66.9% (vector).
+Vector retrieval handles single-conversation lookups fine but falls apart on multi-session synthesis and temporal reasoning. Markdown extraction captures some cross-session structure but loses ~60% of assistant-side questions because LLM distillation skews toward user statements. Memento is the only approach without a catastrophic failure mode — its worst category is 86.5% vs. 41.1% (markdown) and 66.9% (vector).
 
-### Any Model, Same Memory
+### Any model, same memory
 
 Memento is model-agnostic. The same knowledge graph works across providers — only the answer-generation LLM changes. Same Memento graph, same retrieval pipeline, same GPT-4o judge.
 
@@ -208,7 +208,7 @@ Memento is model-agnostic. The same knowledge graph works across providers — o
 | **MiniMax M2.7** | Together (MiniMax) | **90.6%** | **91.2%** |
 | Qwen 3 235B A22B | Together (Alibaba) | 79.6% | 80.1% |
 
-MiniMax M2.7 essentially ties Claude Sonnet 4.6 on the full 500-question run. This is the real "any model, same memory" payoff: when the memory layer is structured and the retrieval is strong, the answer LLM doesn't need to be the flagship — a competitive open-source model matches proprietary performance.
+MiniMax M2.7 essentially ties Claude Sonnet 4.6 on the full 500-question run. When the memory layer is structured and retrieval is strong, the answer model doesn't need to be the flagship — a competitive open-source model matches proprietary performance.
 
 **50-question stratified samples** (small-sample numbers can be noisy — see Qwen's drop from 94.0% on 50 to 79.6% on 500):
 
@@ -221,7 +221,7 @@ MiniMax M2.7 essentially ties Claude Sonnet 4.6 on the full 500-question run. Th
 
 Full methodology and reproduction steps: [BENCHMARKS.md](BENCHMARKS.md)
 
-## Web Viewer
+## Web viewer
 
 Browse the knowledge graph in your browser with a built-in web UI:
 
@@ -230,14 +230,14 @@ pip install memento-memory[web]
 memento-web
 ```
 
-Open http://localhost:8766. The viewer reads from the same `~/.memento/memento.db` that `memento-mcp` writes to — see your agent's memories update in real time.
+Open http://localhost:8766. The viewer reads from the same `~/.memento/memento.db` that `memento-mcp` writes to — you can watch your agent's memories update in real time.
 
 ![Memento graph viewer](docs/graph-viewer.png)
 
 - **Entity list** — search and filter by type (person, organization, project, etc.)
 - **Detail view** — properties, relationships, version history, confidence scores
 - **Graph view** — interactive force-directed visualization with d3.js (zoom, drag, click to navigate)
-- **Timeline view** — when facts were learned vs when they were true (bitemporal)
+- **Timeline view** — when facts were learned vs. when they were true (bitemporal)
 
 ## CLI
 
