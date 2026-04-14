@@ -208,7 +208,7 @@ Memento is model-agnostic. The same knowledge graph works across providers - onl
 |---|---|--:|--:|
 | **Claude Sonnet 4.6** | Anthropic | **90.8%** | **92.2%** |
 | **MiniMax M2.7** | Together (MiniMax) | **90.6%** | **91.2%** |
-| GLM 5.1 FP4 | Together (Zhipu) | 87.4% | 90.2% |
+| GLM 5.1 FP4 | Together (ZAI) | 87.4% | 90.2% |
 | Qwen 3 235B A22B | Together (Alibaba) | 79.6% | 80.1% |
 
 MiniMax M2.7 essentially ties Claude Sonnet 4.6 on the full 500-question run, and GLM 5.1 is within a few points. When the memory layer is structured and retrieval is strong, the answer model doesn't need to be the flagship. A competitive open-source model matches proprietary performance.
