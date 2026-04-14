@@ -221,6 +221,7 @@ def ingest_haystack(
     *,
     per_turn: bool = False,
     progress: bool = True,
+    session_workers: int = 1,
 ) -> None:
     """Ingest all haystack sessions into *store*.
 
@@ -229,9 +230,18 @@ def ingest_haystack(
                    (more granular but slower). If False, ingest one text
                    block per session (faster, recommended for s/m).
         progress:  Print a progress line.
+        session_workers: Number of concurrent session ingestions per question.
+                   Each `store.ingest()` makes 2 LLM calls (entity + relation
+                   extraction). On S/M variants (80-170 sessions per question),
+                   parallelizing session-level ingestion collapses the per-
+                   question wall time from ~5 minutes to ~30 seconds. The
+                   SQLite writes serialize internally via the store's lock;
+                   the parallelism only helps the LLM-bound portions.
     """
     total = len(sessions)
-    for idx, (session, date) in enumerate(zip(sessions, dates)):
+
+    def _ingest_session(args) -> None:
+        idx, session, date = args
         ts = f"{date}T12:00:00+00:00" if "T" not in date else date
         conv_id = f"session_{idx}"
 
@@ -270,8 +280,30 @@ def ingest_haystack(
                     timestamp=ts,
                 )
 
-        if progress and (idx + 1) % 5 == 0:
-            print(f"    Ingested {idx + 1}/{total} sessions", flush=True)
+    items = list(enumerate(zip(sessions, dates)))
+    session_args = [(idx, session, date) for idx, (session, date) in items]
+
+    if session_workers <= 1:
+        # Sequential path — original behavior
+        for idx, args in enumerate(session_args):
+            _ingest_session(args)
+            if progress and (idx + 1) % 5 == 0:
+                print(f"    Ingested {idx + 1}/{total} sessions", flush=True)
+    else:
+        # Parallel path — fan out LLM-bound extraction across session workers.
+        # SQLite writes inside store.ingest() serialize on the store's
+        # connection lock, but that's cheap (~ms) compared to the LLM calls
+        # (~1-2s each). Net effect: ~N-way speedup on ingestion wall time.
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        completed = 0
+        with ThreadPoolExecutor(max_workers=session_workers) as pool:
+            futures = [pool.submit(_ingest_session, args) for args in session_args]
+            for fut in as_completed(futures):
+                # Re-raise any exceptions so the outer try/except catches them
+                fut.result()
+                completed += 1
+                if progress and completed % 5 == 0:
+                    print(f"    Ingested {completed}/{total} sessions", flush=True)
 
     if progress:
         print(f"    Ingested {total}/{total} sessions — done", flush=True)
@@ -521,6 +553,7 @@ def run_benchmark(
     answer_base_url: str | None = None,
     answer_api_key: str | None = None,
     workers: int = 1,
+    session_workers: int = 1,
 ) -> None:
     """Run the full benchmark: ingest → recall → answer → save.
 
@@ -615,7 +648,7 @@ def run_benchmark(
         _run_per_question(
             remaining, llm_client, model, out,
             per_turn=per_turn, token_budget=token_budget,
-            workers=workers,
+            workers=workers, session_workers=session_workers,
         )
 
     # Summary
@@ -676,6 +709,7 @@ def _process_one_question(
     out_path: Path,
     per_turn: bool,
     token_budget: int,
+    session_workers: int = 1,
 ) -> tuple[str, str]:
     """Process a single question in isolation. Safe to run from a worker thread.
 
@@ -688,7 +722,10 @@ def _process_one_question(
 
     store = create_memory_store()
     try:
-        ingest_haystack(store, sessions, dates, per_turn=per_turn, progress=False)
+        ingest_haystack(
+            store, sessions, dates,
+            per_turn=per_turn, progress=False, session_workers=session_workers,
+        )
 
         question = entry["question"]
         current_date = entry.get("question_date", "")
@@ -723,15 +760,21 @@ def _run_per_question(
     per_turn: bool,
     token_budget: int,
     workers: int = 1,
+    session_workers: int = 1,
 ) -> None:
     """Each question has its own haystack — build a store per question.
 
     When workers > 1, questions are processed in parallel via a thread pool.
     Each worker creates its own in-memory SQLite store so there is no shared
     graph state. Only the output JSONL write is serialized (via _write_lock).
+
+    session_workers controls inner parallelism: how many sessions within a
+    single question's haystack are ingested concurrently. On S/M variants
+    this collapses per-question wall time from minutes to seconds.
     """
     total = len(questions)
-    print(f"\n  Processing {total} questions (per-question stores, workers={workers}) ...")
+    print(f"\n  Processing {total} questions (per-question stores, "
+          f"workers={workers}, session_workers={session_workers}) ...")
 
     if workers <= 1:
         # Sequential path — preserves the original progress output
@@ -739,7 +782,8 @@ def _run_per_question(
             qid = entry["question_id"]
             print(f"\n  [{i+1}/{total}] {qid} ({len(entry['haystack_sessions'])} sessions)")
             _process_one_question(
-                entry, llm_client, model, out_path, per_turn, token_budget
+                entry, llm_client, model, out_path, per_turn, token_budget,
+                session_workers=session_workers,
             )
         return
 
@@ -751,6 +795,7 @@ def _run_per_question(
             pool.submit(
                 _process_one_question,
                 entry, llm_client, model, out_path, per_turn, token_budget,
+                session_workers,
             ): entry["question_id"]
             for entry in questions
         }
@@ -1073,6 +1118,13 @@ def main() -> None:
              "(default: 1, sequential). Each worker uses its own in-memory "
              "SQLite store. Only the per-question path is parallelized.",
     )
+    run.add_argument(
+        "--session-workers", type=int, default=1,
+        help="Number of concurrent session ingestions within each question "
+             "(default: 1). Useful on s/m variants where each question has "
+             "80-170 sessions and ingestion is LLM-bound. 10-20 is a good "
+             "starting point.",
+    )
 
     # evaluate -----------------------------------------------------------
     ev = sub.add_parser("evaluate", help="Evaluate results with GPT-4o judge")
@@ -1111,6 +1163,7 @@ def main() -> None:
             answer_base_url=args.answer_base_url,
             answer_api_key=args.answer_api_key,
             workers=args.workers,
+            session_workers=args.session_workers,
         )
 
     elif args.command == "evaluate":
